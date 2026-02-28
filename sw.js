@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tex-sauce-maker-v1';
+const CACHE_NAME = 'tex-sauce-maker-v3';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
     './app.js',
     './icon-192x192.png',
     './icon-512x512.png',
+    './icon-windows.png',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap',
     'https://fonts.googleapis.com/icon?family=Material+Icons+Round',
     'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css',
