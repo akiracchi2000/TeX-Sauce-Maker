@@ -836,5 +836,14 @@ function setupEventListeners() {
 
 // Start
 init();
-i f   ( ' s e r v i c e W o r k e r '   i n   n a v i g a t o r )   {   w i n d o w . a d d E v e n t L i s t e n e r ( ' l o a d ' ,   ( )   = >   {   n a v i g a t o r . s e r v i c e W o r k e r . r e g i s t e r ( ' . / s w . j s ' ) . t h e n ( ( r e g i s t r a t i o n )   = >   {   c o n s o l e . l o g ( ' S e r v i c e W o r k e r   r e g i s t r a t i o n   s u c c e s s f u l   w i t h   s c o p e :   ' ,   r e g i s t r a t i o n . s c o p e ) ;   } ,   ( e r r )   = >   {   c o n s o l e . l o g ( ' S e r v i c e W o r k e r   r e g i s t r a t i o n   f a i l e d :   ' ,   e r r ) ;   } ) ;   } ) ;   }  
- 
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((registration) => {
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }).catch((err) => {
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  });
+}

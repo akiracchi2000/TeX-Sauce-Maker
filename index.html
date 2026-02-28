@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeX Sauce Maker</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.svg">
+
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- Google Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <span class="material-icons-round">functions</span>
+                </div>
+                <h1 class="logo-text">
+                    <span class="brand-main">TeX Sauce</span>
+                    <span class="brand-sub">Maker</span>
+                    <span id="header-version" class="header-version"></span>
+                </h1>
+            </div>
+            <button id="settings-btn" class="icon-btn" title="設定"><span
+                    class="material-icons-round">settings</span></button>
+        </header>
+
+        <main>
+            <div class="split-view">
+                <div class="left-panel">
+                    <!-- Prompt Section -->
+                    <section class="prompt-section">
+                        <div class="section-header">
+                            <h2>プロンプト選択</h2>
+                            <button id="manage-prompts-btn" class="text-btn">管理</button>
+                        </div>
+                        <select id="prompt-select" class="prompt-select">
+                            <!-- Options injected by JS -->
+                        </select>
+                        <textarea id="current-prompt-display" class="prompt-preview" spellcheck="false"></textarea>
+                    </section>
+
+                    <!-- Refine Section (Moved) -->
+                    <section class="refine-input-section">
+                        <textarea id="additional-prompt-input" class="refine-textarea"
+                            placeholder="追加の指示 (例: 解説をもっと詳しく、数式を修正して)" rows="3"></textarea>
+                        <button id="regenerate-btn" class="secondary-btn full-width-btn" disabled>
+                            <span class="material-icons-round">refresh</span> 追加指示で再生成
+                        </button>
+                    </section>
+
+                    <!-- Image Input Section -->
+                    <section class="drop-zone-container">
+                        <div id="drop-zone" class="drop-zone">
+                            <span class="material-icons-round upload-icon">cloud_upload</span>
+                            <p>画像をここにドラッグ＆ドロップ</p>
+                            <p class="sub-text">またはクリックしてファイルを選択</p>
+                            <input type="file" id="file-input" accept="image/*,application/pdf,application/pdf" multiple
+                                hidden>
+                        </div>
+                        <div id="image-preview-container" class="image-preview-container hidden">
+                            <!-- Previews injected here -->
+                        </div>
+                    </section>
+
+
+                </div>
+
+                <div class="right-panel">
+                    <!-- Output Section -->
+                    <section class="output-section">
+                        <h2>生成結果</h2>
+                        <div class="output-container">
+                            <pre><code id="output-code"></code></pre>
+                        </div>
+
+                        <!-- Refine Section (Generate Button & Copy Button) -->
+                        <div class="refine-section">
+                            <div class="button-row">
+                                <button id="generate-btn" class="primary-btn" disabled>
+                                    <span class="material-icons-round">auto_awesome</span> 生成
+                                </button>
+                                <button id="copy-btn" class="success-btn" hidden>
+                                    <span class="material-icons-round">content_copy</span> コピー
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="loading-indicator" class="loading hidden">
+                            <div class="spinner"></div>
+                            <p>生成中...</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>設定 <span id="app-version" class="version-tag"></span></h3>
+                    <button class="close-modal-btn icon-btn"><span class="material-icons-round">close</span></button>
+                </div>
+                <div class="modal-body">
+                    <label for="api-key-input">Gemini API Key</label>
+                    <input type="password" id="api-key-input" placeholder="Enter your API Key">
+                    <p class="hint">APIキーはブラウザのLocalStorageにのみ保存されます。</p>
+
+                    <div class="setting-item" style="margin-top: 1rem;">
+                        <label for="model-name-display">使用モデル (例: gemini-3.1-pro-preview)</label>
+                        <input type="text" id="model-name-display" list="model-name-options"
+                            placeholder="gemini-3.1-pro-preview">
+                        <datalist id="model-name-options">
+                            <option value="gemini-3.1-pro-preview"></option>
+                            <option value="gemini-3-pro-preview"></option>
+                            <option value="gemini-2.5-pro"></option>
+                        </datalist>
+                    </div>
+
+                    <div class="setting-item"
+                        style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="sound-enabled-check">
+                        <label for="sound-enabled-check">生成完了時に音を鳴らす</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="save-settings-btn" class="primary-btn">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompt Management Modal -->
+        <div id="prompts-modal" class="modal hidden">
+            <div class="modal-content large-modal">
+                <div class="modal-header">
+                    <h3>プロンプト管理</h3>
+                    <button class="close-modal-btn icon-btn"><span class="material-icons-round">close</span></button>
+                </div>
+                <div class="modal-body two-col">
+                    <div class="prompt-list-col">
+                        <button id="new-prompt-btn" class="secondary-btn small-btn">+ 新規作成</button>
+                        <ul id="prompt-list" class="prompt-list">
+                            <!-- List items injected by JS -->
+                        </ul>
+                    </div>
+                    <div class="prompt-editor-col">
+                        <label for="edit-prompt-name">名前</label>
+                        <input type="text" id="edit-prompt-name" placeholder="プロンプト名">
+                        <label for="edit-prompt-content">内容</label>
+                        <textarea id="edit-prompt-content" placeholder="プロンプトの内容..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="footer-left">
+                        <button id="export-prompts-btn" class="secondary-btn" title="JSONとして保存">
+                            <span class="material-icons-round">download</span> エクスポート
+                        </button>
+                        <button id="import-prompts-btn" class="secondary-btn" title="JSONファイルを読み込む">
+                            <span class="material-icons-round">upload</span> インポート
+                        </button>
+                        <input type="file" id="import-prompts-input" accept=".json" hidden>
+                    </div>
+                    <div class="footer-right">
+                        <button id="delete-prompt-btn" class="danger-btn">削除</button>
+                        <button id="save-prompt-btn" class="primary-btn">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <!-- Marked for markdown rendering if needed, though we might output raw text -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/latex.min.js"></script>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
