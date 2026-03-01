@@ -1,5 +1,5 @@
 ﻿// --- Constants & Defaults ---
-const APP_VERSION = 'v1.6.3';
+const APP_VERSION = 'v1.6.4';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
