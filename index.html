@@ -5,13 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TeX Sauce Maker</title>
-    <!-- PWA Settings -->
-    <link rel="manifest" href="manifest.json?v=3">
-    <meta name="theme-color" content="#2563eb">
+    <link rel="manifest" href="manifest.json?v=4">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192x192.png?v=3">
-
+    <link rel="apple-touch-icon" href="icon-192x192.png?v=4">
     <link rel="stylesheet" href="style.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap"
@@ -120,16 +116,14 @@
                     <p class="hint">APIキーはブラウザのLocalStorageにのみ保存されます。</p>
 
                     <div class="setting-item" style="margin-top: 1rem;">
-                        <label for="model-name-display">使用モデル (例: gemini-3.1-pro-preview)</label>
-                        <input type="text" id="model-name-display" list="model-name-options"
-                            placeholder="gemini-3.1-pro-preview">
-                        <datalist id="model-name-options">
-                            <option value="gemini-3.1-pro-preview"></option>
-                            <option value="gemini-3-pro-preview"></option>
-                            <option value="gemini-3-flash-preview"></option>
-                            <option value="gemini-2.5-pro"></option>
-                            <option value="gemini-2.5-flash"></option>
-                        </datalist>
+                        <label for="model-name-display">使用モデル</label>
+                        <select id="model-name-display" class="prompt-select" style="margin-bottom: 0;">
+                            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                            <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+                            <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                        </select>
                     </div>
 
                     <div class="setting-item"

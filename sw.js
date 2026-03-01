@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tex-sauce-maker-v5';
+const CACHE_NAME = 'tex-sauce-maker-v6';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
