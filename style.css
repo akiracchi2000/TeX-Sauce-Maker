@@ -398,6 +398,40 @@ button {
     font-size: 16px;
 }
 
+/* Filename Input */
+.filename-input-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.filename-input-container .material-icons-round {
+    color: var(--text-sub);
+    font-size: 20px;
+}
+
+.filename-input-container input {
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-main);
+    width: 100%;
+    outline: none;
+}
+
+.filename-input-container input::placeholder {
+    color: var(--text-sub);
+    font-weight: 400;
+}
+
 /* Output Area */
 .output-container {
     position: relative;

@@ -1,5 +1,5 @@
-﻿// --- Constants & Defaults ---
-const APP_VERSION = 'v1.6.5';
+// --- Constants & Defaults ---
+const APP_VERSION = 'v1.7.3';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -40,7 +40,8 @@ let state = {
     apiKey: '',
     soundEnabled: true,
     currentImages: [], // Array of { id, file, base64, mimeType }
-    hasGenerated: false
+    hasGenerated: false,
+    receivedTikzCode: [] // Array of raw TikZ code strings received from Clear Maker 2
 };
 
 // --- DOM Elements ---
@@ -81,6 +82,8 @@ const dom = {
     generateBtn: document.getElementById('generate-btn'),
     outputCode: document.getElementById('output-code'),
     copyBtn: document.getElementById('copy-btn'),
+    obsidianExportBtn: document.getElementById('obsidian-export-btn'),
+    baseNameInput: document.getElementById('base-name-input'),
     additionalPromptInput: document.getElementById('additional-prompt-input'),
     regenerateBtn: document.getElementById('regenerate-btn'),
     loadingIndicator: document.getElementById('loading-indicator'),
@@ -94,6 +97,43 @@ function init() {
     renderPromptSelect();
     setupEventListeners();
     showVersion();
+
+    // --- Clear Maker 2 連携: postMessage受信リスナー ---
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'clear-maker-image') {
+            const dataUrl = event.data.imageDataUrl;
+            const mimeType = event.data.mimeType || 'image/png';
+
+            // data:URLからbase64部分を抽出
+            const base64Parts = dataUrl.split(',');
+            if (base64Parts.length > 1) {
+                // 前回の生成結果をクリア
+                state.currentImages = [];
+                state.hasGenerated = false;
+                state.receivedTikzCode = event.data.tikzCodeArray || []; // TikZコード配列を受け取る
+                dom.outputCode.textContent = '';
+                dom.additionalPromptInput.value = '';
+
+                addImageToState({
+                    id: Date.now() + Math.random().toString(36).substring(2, 9),
+                    file: null, // postMessage経由のためFileオブジェクトなし
+                    base64: base64Parts[1],
+                    mimeType: mimeType,
+                    previewUrl: dataUrl
+                });
+
+                showToast('Clear Maker 2から画像を受信しました');
+                console.log('[TeX連携] Clear Maker 2から画像を受信・読み込み完了');
+            }
+        }
+    });
+
+    // --- Clear Maker 2 連携: readyシグナル送信 ---
+    // window.openerが存在する場合（Clear Maker 2から開かれた場合）readyを通知
+    if (window.opener) {
+        window.opener.postMessage({ type: 'tex-sauce-maker-ready' }, '*');
+        console.log('[TeX連携] readyシグナルをClear Maker 2に送信しました');
+    }
 }
 
 // --- Logic: Settings ---
@@ -356,10 +396,12 @@ function handleFileSelect(files) {
         // Clear state images
         state.currentImages = [];
         state.hasGenerated = false;
+        state.receivedTikzCode = []; // Clear old TikZ hints
         // Update UI
         renderPreviews();
         dom.outputCode.textContent = '';
         dom.additionalPromptInput.value = ''; // Clear additional instructions
+        dom.baseNameInput.value = ''; // Clear base name
 
         // "生成が終わった場合，次のドロップ時に前の画像を消去してほしい。" -> Clear previous image on next drop.
     }
@@ -391,6 +433,11 @@ function processImageFile(file) {
                 mimeType: file.type,
                 previewUrl: e.target.result
             });
+
+            // Set default base name from file name
+            if (dom.baseNameInput && !dom.baseNameInput.value) {
+                dom.baseNameInput.value = file.name.replace(/\.[^/.]+$/, "");
+            }
         }
     };
     reader.readAsDataURL(file);
@@ -426,6 +473,11 @@ async function processPdfFile(file) {
                 previewUrl: dataUrl
             });
             showToast(`PDF読み込み完了: ${file.name} (1ページ目)`);
+
+            // Set default base name from file name
+            if (dom.baseNameInput && !dom.baseNameInput.value) {
+                dom.baseNameInput.value = file.name.replace(/\.[^/.]+$/, "");
+            }
         }
     } catch (e) {
         console.error('PDF processing failed:', e);
@@ -504,6 +556,7 @@ async function generateContent(extraPrompt = null) {
     setLoading(true);
     dom.outputCode.textContent = '';
     dom.copyBtn.hidden = true;
+    dom.obsidianExportBtn.hidden = true;
 
     try {
         // Use the edited content directly from the textarea
@@ -511,6 +564,14 @@ async function generateContent(extraPrompt = null) {
 
         if (extraPrompt) {
             finalPromptContent += `\n\n【追加の指示】\n${extraPrompt}`;
+        }
+
+        // --- 連携された生のTikZコードが存在する場合はプロンプトに組み込む ---
+        if (state.receivedTikzCode && state.receivedTikzCode.length > 0) {
+            finalPromptContent += `\n\n【重要・グラフ描画の指示】\n以下のTikZコードは図形（グラフ等）の正確な描画データです。画像内のグラフ部分を出力する際は、画像から推測するのではなく、必ず以下のTikZコードをそのままコピーして組み込んでください。\n`;
+            state.receivedTikzCode.forEach((code, index) => {
+                finalPromptContent += `\n--- 図形${index + 1}のTikZコード ---\n${code}\n--------------------\n`;
+            });
         }
 
         const result = await callGeminiApi(finalPromptContent, state.currentImages);
@@ -533,6 +594,7 @@ async function generateContent(extraPrompt = null) {
         applyCustomHighlighting(dom.outputCode);
 
         dom.copyBtn.hidden = false;
+        dom.obsidianExportBtn.hidden = false;
 
         if (state.soundEnabled) {
             playSuccessSound();
@@ -608,6 +670,150 @@ function setLoading(isLoading) {
         dom.outputCode.parentElement.classList.remove('hidden');
     }
 }
+
+async function exportToObsidian() {
+    const texSource = dom.outputCode.textContent;
+    if (!texSource) {
+        showToast('TeXソースがありません');
+        return;
+    }
+
+    if (!state.apiKey) {
+        openModal(dom.settingsModal);
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const metadataPrompt = `以下のTeXソースを解析し、以下の情報をJSON形式で返してください。
+1. 文章内の用語 (terms)
+2. 解法の用語 (methods)
+3. 分野の用語 (fields: 数学I, 数学A, 数学II, 数学B, 数学III, 数学C などの大項目)
+4. 難易度 (difficulty: 1から5の数値)
+
+JSONフォーマット:
+{
+  "terms": ["用語1", "用語2"],
+  "methods": ["手法1", "手法2"],
+  "fields": ["分野1"],
+  "difficulty": 3
+}
+
+TeXソース:
+${texSource}`;
+
+        const metadataResponse = await callGeminiApiForMetadata(metadataPrompt);
+        const metadata = JSON.parse(metadataResponse);
+
+        // baseName取得
+        let baseName = dom.baseNameInput.value.trim() || 'output';
+
+        const difficulty = metadata.difficulty || 3;
+        const difficultyLabel = '★'.repeat(difficulty);
+        const tags = [...(metadata.terms || []), ...(metadata.methods || []), ...(metadata.fields || [])];
+
+        const mdContent = `---
+type: problem
+unit: ""
+difficulty: ${difficulty}
+difficulty_label: ${difficultyLabel}
+parents:
+tags:
+${tags.map(tag => `  - ${tag}`).join('\n')}
+---
+
+### TeXコード
+
+[[${baseName}.tex]]
+
+#### PDF
+
+![[${baseName}.pdf]]
+
+#### TeXソース
+\`\`\`latex
+${texSource}
+\`\`\`
+`;
+
+        const saved = await downloadFile(`${baseName}.md`, mdContent);
+        if (saved) {
+            showToast('Obsidian用.mdを書き出しました');
+        }
+
+    } catch (error) {
+        console.error('Obsidian export failed:', error);
+        showToast('変換に失敗しました: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function callGeminiApiForMetadata(promptText) {
+    const model = 'gemini-3-flash-preview'; // User requested this
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${state.apiKey}`;
+
+    const payload = {
+        contents: [{
+            parts: [{ text: promptText }]
+        }],
+        generationConfig: {
+            temperature: 0.1,
+            response_mime_type: "application/json",
+        }
+    };
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || response.statusText);
+    }
+
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text;
+}
+
+async function downloadFile(filename, content) {
+    // Chrome/Edgeなどで利用可能な File System Access API を優先
+    if ('showSaveFilePicker' in window) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'Markdown File',
+                    accept: { 'text/markdown': ['.md'] },
+                }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            return true;
+        } catch (err) {
+            // ユーザーがキャンセルした場合は何もしない
+            if (err.name === 'AbortError') return false;
+            console.warn('File System Access API failed, falling back:', err);
+        }
+    }
+
+    // 従来のダウンロード方式（SafariやFirefox、またはAPIエラー時のフォールバック）
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/markdown;charset=utf-8,' + encodeURIComponent(content));
+    element.setAttribute('download', filename);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    return true;
+}
+
+
 
 
 
@@ -754,6 +960,9 @@ function setupEventListeners() {
             showToast('コピーしました');
         });
     });
+
+    dom.obsidianExportBtn.addEventListener('click', exportToObsidian);
+
 
     // Auto-Save Prompt Edit
     let autoSaveTimeout;

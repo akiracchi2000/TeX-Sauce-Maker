@@ -78,6 +78,10 @@
                     <!-- Output Section -->
                     <section class="output-section">
                         <h2>生成結果</h2>
+                        <div class="filename-input-container">
+                            <span class="material-icons-round">tag</span>
+                            <input type="text" id="base-name-input" placeholder="ファイル名 (ID)" title="エクスポート時のファイル名に使用されます">
+                        </div>
                         <div class="output-container">
                             <pre><code id="output-code"></code></pre>
                         </div>
@@ -90,6 +94,9 @@
                                 </button>
                                 <button id="copy-btn" class="success-btn" hidden>
                                     <span class="material-icons-round">content_copy</span> コピー
+                                </button>
+                                <button id="obsidian-export-btn" class="secondary-btn" hidden>
+                                    <span class="material-icons-round">description</span> Obsidian用.md変換
                                 </button>
                             </div>
                         </div>
@@ -121,6 +128,7 @@
                             <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
                             <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
                             <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                            <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</option>
                             <option value="gemini-2.5-pro">gemini-2.5-pro</option>
                             <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                         </select>
