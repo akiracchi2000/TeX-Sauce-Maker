@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.7.3';
+const APP_VERSION = 'v1.7.6';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -671,6 +671,28 @@ function setLoading(isLoading) {
     }
 }
 
+function inferDifficultyFromMetadata(rawDifficulty, tags) {
+    const numericDifficulty = Number.parseInt(rawDifficulty, 10);
+    let difficulty = Number.isFinite(numericDifficulty) ? numericDifficulty : 3;
+    const tagText = tags.join(' ').toLowerCase();
+
+    const difficultySignals = [
+        { level: 5, patterns: ['難関', '最難関', '非典型', '高度', '発想', '論証', '抽象', '大学入試発展'] },
+        { level: 4, patterns: ['発展', '証明', '場合分け', '融合', '数iii', '数学iii', '複素数平面', '整数', '軌跡', '最大最小', '確率漸化式'] },
+        { level: 3, patterns: ['標準', '応用', '複数', 'ベクトル', '漸化式', '微分', '積分', '数列', '確率'] },
+        { level: 2, patterns: ['典型', '基本', '公式', '計算', '単一'] }
+    ];
+
+    for (const signal of difficultySignals) {
+        if (signal.patterns.some(pattern => tagText.includes(pattern))) {
+            difficulty = Math.max(difficulty, signal.level);
+            break;
+        }
+    }
+
+    return Math.min(5, Math.max(1, difficulty));
+}
+
 async function exportToObsidian() {
     const texSource = dom.outputCode.textContent;
     if (!texSource) {
@@ -691,6 +713,17 @@ async function exportToObsidian() {
 3. 分野の用語 (fields: 数学I, 数学A, 数学II, 数学B, 数学III, 数学C などの大項目)
 4. 難易度 (difficulty: 1から5の数値)
 
+難易度は、問題文そのものだけでなく、生成済みの解答・解説の内容と、作成したterms/methods/fieldsタグも必ず参照して判別してください。
+解答で使われている手法の数、場合分けの多さ、計算量、論証の長さ、発想の必要性もdifficultyに反映してください。
+目安:
+- 1: 基本公式の直接適用、計算量が少ない、小問集合など
+- 2: 標準的な典型問題、単一分野の基本手法
+- 3: 複数条件の整理、標準からやや発展、複数手法の組み合わせ
+- 4: 発展問題、場合分け・証明・複数分野融合・高度な発想を含む
+- 5: 難関大レベル、抽象度が高い、非典型で重い発想や長い論証を要する
+
+特にmethodsやfieldsに、発展、証明、場合分け、融合、数III、ベクトル、複素数平面、確率漸化式、整数、軌跡、最大最小など難度に影響するタグが含まれる場合は、それをdifficultyに反映してください。
+
 JSONフォーマット:
 {
   "terms": ["用語1", "用語2"],
@@ -708,9 +741,12 @@ ${texSource}`;
         // baseName取得
         let baseName = dom.baseNameInput.value.trim() || 'output';
 
-        const difficulty = metadata.difficulty || 3;
+        const terms = (metadata.terms || []).filter(Boolean);
+        const methods = (metadata.methods || []).filter(Boolean);
+        const fields = (metadata.fields || []).filter(Boolean);
+        const tags = [...terms, ...methods, ...fields];
+        const difficulty = inferDifficultyFromMetadata(metadata.difficulty, tags);
         const difficultyLabel = '★'.repeat(difficulty);
-        const tags = [...(metadata.terms || []), ...(metadata.methods || []), ...(metadata.fields || [])];
 
         const mdContent = `---
 type: problem
@@ -718,6 +754,12 @@ unit: ""
 difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
 parents:
+terms:
+${terms.map(term => `  - ${term}`).join('\n')}
+methods:
+${methods.map(method => `  - ${method}`).join('\n')}
+fields:
+${fields.map(field => `  - ${field}`).join('\n')}
 tags:
 ${tags.map(tag => `  - ${tag}`).join('\n')}
 ---
