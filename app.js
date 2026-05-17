@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.7.6';
+const APP_VERSION = 'v1.7.8';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -693,6 +693,18 @@ function inferDifficultyFromMetadata(rawDifficulty, tags) {
     return Math.min(5, Math.max(1, difficulty));
 }
 
+function formatYamlList(items) {
+    if (!items.length) {
+        return '[]';
+    }
+
+    return items
+        .map(item => String(item).replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .map(item => `  - ${item}`)
+        .join('\n');
+}
+
 async function exportToObsidian() {
     const texSource = dom.outputCode.textContent;
     if (!texSource) {
@@ -755,13 +767,13 @@ difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
 parents:
 terms:
-${terms.map(term => `  - ${term}`).join('\n')}
+${formatYamlList(terms)}
 methods:
-${methods.map(method => `  - ${method}`).join('\n')}
+${formatYamlList(methods)}
 fields:
-${fields.map(field => `  - ${field}`).join('\n')}
+${formatYamlList(fields)}
 tags:
-${tags.map(tag => `  - ${tag}`).join('\n')}
+${formatYamlList(tags)}
 ---
 
 ### TeXコード
