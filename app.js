@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.7.8';
+const APP_VERSION = 'v1.8.7';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -90,8 +90,38 @@ const dom = {
     toast: document.getElementById('toast')
 };
 
+let outputEditor = null;
+
+function initializeOutputEditor() {
+    if (typeof CodeMirror === 'undefined') return;
+
+    outputEditor = CodeMirror.fromTextArea(dom.outputCode, {
+        mode: 'stex',
+        theme: 'material-darker',
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 4,
+        tabSize: 4,
+        viewportMargin: Infinity
+    });
+}
+
+function setOutputCode(text) {
+    if (outputEditor) {
+        outputEditor.setValue(text);
+        outputEditor.clearHistory();
+    } else {
+        dom.outputCode.value = text;
+    }
+}
+
+function getOutputCode() {
+    return outputEditor ? outputEditor.getValue() : dom.outputCode.value;
+}
+
 // --- Initialization ---
 function init() {
+    initializeOutputEditor();
     loadSettings();
     loadPrompts();
     renderPromptSelect();
@@ -111,7 +141,7 @@ function init() {
                 state.currentImages = [];
                 state.hasGenerated = false;
                 state.receivedTikzCode = event.data.tikzCodeArray || []; // TikZコード配列を受け取る
-                dom.outputCode.textContent = '';
+                setOutputCode('');
                 dom.additionalPromptInput.value = '';
 
                 addImageToState({
@@ -399,7 +429,7 @@ function handleFileSelect(files) {
         state.receivedTikzCode = []; // Clear old TikZ hints
         // Update UI
         renderPreviews();
-        dom.outputCode.textContent = '';
+        setOutputCode('');
         dom.additionalPromptInput.value = ''; // Clear additional instructions
         dom.baseNameInput.value = ''; // Clear base name
 
@@ -554,7 +584,7 @@ async function generateContent(extraPrompt = null) {
     if (!prompt) return;
 
     setLoading(true);
-    dom.outputCode.textContent = '';
+    setOutputCode('');
     dom.copyBtn.hidden = true;
     dom.obsidianExportBtn.hidden = true;
 
@@ -588,10 +618,7 @@ async function generateContent(extraPrompt = null) {
             text = match[1];
         }
 
-        dom.outputCode.textContent = text;
-        dom.outputCode.className = 'language-latex'; // Default to latex
-        hljs.highlightElement(dom.outputCode);
-        applyCustomHighlighting(dom.outputCode);
+        setOutputCode(text);
 
         dom.copyBtn.hidden = false;
         dom.obsidianExportBtn.hidden = false;
@@ -604,7 +631,7 @@ async function generateContent(extraPrompt = null) {
 
     } catch (error) {
         console.error(error);
-        dom.outputCode.textContent = 'エラーが発生しました: ' + error.message;
+        setOutputCode('エラーが発生しました: ' + error.message);
         if (error.message.includes('401') || error.message.includes('INVALID_ARGUMENT')) {
             showToast('API Keyが無効の可能性があります');
         }
@@ -705,8 +732,69 @@ function formatYamlList(items) {
         .join('\n');
 }
 
+function uniqueItems(items) {
+    const seen = new Set();
+    return items.filter(item => {
+        const normalized = String(item).replace(/\s+/g, ' ').trim();
+        if (!normalized || seen.has(normalized)) {
+            return false;
+        }
+        seen.add(normalized);
+        return true;
+    });
+}
+
+function formatObsidianCodeSections(source) {
+    // 言語名の有無や表記にかかわらず、Markdownのフェンスを抽出する。
+    const fencedBlockPattern = /^(?:```|~~~)[^\r\n]*\r?\n([\s\S]*?)^(?:```|~~~)[^\r\n]*$/gm;
+    const blocks = [...source.matchAll(fencedBlockPattern)]
+        .map(match => match[1].trim())
+        .filter(Boolean);
+
+    // 生成結果の先頭フェンスだけが除去され、
+    // 「1つ目の終了フェンス → 2つ目の開始フェンス」となる場合を補正する。
+    if (blocks.length < 2) {
+        const splitPattern = /^(?:```|~~~)[^\r\n]*\r?\n\s*^(?:```|~~~)[^\r\n]*\r?\n/m;
+        const splitMatch = splitPattern.exec(source);
+
+        if (splitMatch) {
+            const firstBlock = source.slice(0, splitMatch.index).trim();
+            const secondBlock = source.slice(splitMatch.index + splitMatch[0].length)
+                .replace(/\r?\n?(?:```|~~~)\s*$/, '')
+                .trim();
+
+            if (firstBlock && secondBlock) {
+                return `### TeXソース
+\`\`\`latex
+${firstBlock}
+\`\`\`
+
+### 解答
+\`\`\`latex
+${secondBlock}
+\`\`\``;
+            }
+        }
+    }
+
+    if (blocks.length < 2) {
+        return `### TeXソース
+\`\`\`latex
+${source}
+\`\`\``;
+    }
+
+    return blocks.map((block, index) => {
+        const heading = index === 0 ? '### TeXソース' : '### 解答';
+        return `${heading}
+\`\`\`latex
+${block}
+\`\`\``;
+    }).join('\n\n');
+}
+
 async function exportToObsidian() {
-    const texSource = dom.outputCode.textContent;
+    const texSource = getOutputCode();
     if (!texSource) {
         showToast('TeXソースがありません');
         return;
@@ -756,16 +844,16 @@ ${texSource}`;
         const terms = (metadata.terms || []).filter(Boolean);
         const methods = (metadata.methods || []).filter(Boolean);
         const fields = (metadata.fields || []).filter(Boolean);
-        const tags = [...terms, ...methods, ...fields];
+        const tags = uniqueItems([...terms, ...methods, ...fields]);
         const difficulty = inferDifficultyFromMetadata(metadata.difficulty, tags);
         const difficultyLabel = '★'.repeat(difficulty);
+        const codeSections = formatObsidianCodeSections(texSource);
 
         const mdContent = `---
 type: problem
 unit: ""
 difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
-parents:
 terms:
 ${formatYamlList(terms)}
 methods:
@@ -780,14 +868,11 @@ ${formatYamlList(tags)}
 
 [[${baseName}.tex]]
 
-#### PDF
+### PDF
 
 ![[${baseName}.pdf]]
 
-#### TeXソース
-\`\`\`latex
-${texSource}
-\`\`\`
+${codeSections}
 `;
 
         const saved = await downloadFile(`${baseName}.md`, mdContent);
@@ -1009,7 +1094,7 @@ function setupEventListeners() {
     });
 
     dom.copyBtn.addEventListener('click', () => {
-        const text = dom.outputCode.textContent;
+        const text = getOutputCode();
         navigator.clipboard.writeText(text).then(() => {
             showToast('コピーしました');
         });

@@ -83,7 +83,8 @@
                             <input type="text" id="base-name-input" placeholder="ファイル名 (ID)" title="エクスポート時のファイル名に使用されます">
                         </div>
                         <div class="output-container">
-                            <pre><code id="output-code"></code></pre>
+                            <textarea id="output-code" class="output-editor" aria-label="生成結果を編集"
+                                placeholder="生成されたコードがここに表示されます" spellcheck="false"></textarea>
                         </div>
 
                         <!-- Refine Section (Generate Button & Copy Button) -->
@@ -194,6 +195,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/latex.min.js"></script>
+
+    <!-- CodeMirror: editable LaTeX editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/stex/stex.min.js"></script>
 
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tex-sauce-maker-v7';
+const CACHE_NAME = 'tex-sauce-maker-v15';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -12,6 +12,10 @@ const ASSETS_TO_CACHE = [
     'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css',
     'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/latex.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/stex/stex.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
     'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
