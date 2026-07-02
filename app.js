@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.8.7';
+const APP_VERSION = 'v1.8.8';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -784,13 +784,20 @@ ${source}
 \`\`\``;
     }
 
-    return blocks.map((block, index) => {
-        const heading = index === 0 ? '### TeXソース' : '### 解答';
-        return `${heading}
+    const sections = [`### TeXソース
+\`\`\`latex
+${blocks[0]}
+\`\`\``];
+
+    blocks.slice(1).forEach(block => {
+        // 「### 解答」は、必ず2回目以降の ```latex の直前に入れる。
+        sections.push(`### 解答
 \`\`\`latex
 ${block}
-\`\`\``;
-    }).join('\n\n');
+\`\`\``);
+    });
+
+    return sections.join('\n\n');
 }
 
 async function exportToObsidian() {
