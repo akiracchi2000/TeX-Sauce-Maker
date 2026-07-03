@@ -1,9 +1,9 @@
-const CACHE_NAME = 'tex-sauce-maker-v17';
+const CACHE_NAME = 'tex-sauce-maker-v19';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './style.css',
-    './app.js?v=1.8.9',
+    './app.js?v=1.8.10',
     './icon-192x192.png',
     './icon-512x512.png',
     './icon-windows.png',
