@@ -199,6 +199,14 @@
     <!-- CodeMirror: editable LaTeX editor -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+    <style>
+        /* Keep the editor selection visible in installed PWA windows.
+           This must come after CodeMirror's styles. */
+        .output-container .CodeMirror .CodeMirror-selected,
+        .output-container .CodeMirror-focused .CodeMirror-selected {
+            background-color: #006eff !important;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/stex/stex.min.js"></script>
 
