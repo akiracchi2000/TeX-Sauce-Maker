@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.8.10';
+const APP_VERSION = 'v1.9.0';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -39,6 +39,7 @@ let state = {
     selectedPromptId: null,
     apiKey: '',
     soundEnabled: true,
+    inputMode: 'image',
     currentImages: [], // Array of { id, file, base64, mimeType }
     hasGenerated: false,
     receivedTikzCode: [] // Array of raw TikZ code strings received from Clear Maker 2
@@ -77,6 +78,11 @@ const dom = {
     dropZone: document.getElementById('drop-zone'),
     fileInput: document.getElementById('file-input'),
     imagePreviewContainer: document.getElementById('image-preview-container'),
+    imageModeBtn: document.getElementById('image-mode-btn'),
+    codeModeBtn: document.getElementById('code-mode-btn'),
+    imageInputPanel: document.getElementById('image-input-panel'),
+    codeInputPanel: document.getElementById('code-input-panel'),
+    sourceCodeInput: document.getElementById('source-code-input'),
     // previewImg/removeImgBtn removed as they generate dynamically
 
     generateBtn: document.getElementById('generate-btn'),
@@ -140,6 +146,7 @@ function init() {
                 // 前回の生成結果をクリア
                 state.currentImages = [];
                 state.hasGenerated = false;
+                setInputMode('image');
                 state.receivedTikzCode = event.data.tikzCodeArray || []; // TikZコード配列を受け取る
                 setOutputCode('');
                 dom.additionalPromptInput.value = '';
@@ -210,6 +217,7 @@ function saveSettings() {
     localStorage.setItem(STORAGE_KEY_SOUND_ENABLED, state.soundEnabled);
 
     closeModal(dom.settingsModal);
+    checkGenerateButtonState();
     showToast('設定を保存しました');
 }
 
@@ -561,13 +569,33 @@ function renderPreviews() {
 }
 
 
-function checkGenerateButtonState() {
-    const canGenerate = state.apiKey && state.currentImages.length > 0;
+function checkGenerateButtonState(showKeyWarning = true) {
+    const hasSource = state.inputMode === 'code'
+        ? dom.sourceCodeInput.value.trim().length > 0
+        : state.currentImages.length > 0;
+    const canGenerate = state.apiKey && hasSource;
     dom.generateBtn.disabled = !canGenerate;
     dom.regenerateBtn.disabled = !canGenerate;
 
-    if (!state.apiKey && state.currentImages.length > 0) {
+    if (showKeyWarning && !state.apiKey && hasSource) {
         showToast('設定からAPI Keyを入力してください');
+    }
+}
+
+function setInputMode(mode) {
+    state.inputMode = mode === 'code' ? 'code' : 'image';
+    const isCodeMode = state.inputMode === 'code';
+
+    dom.imageModeBtn.classList.toggle('active', !isCodeMode);
+    dom.codeModeBtn.classList.toggle('active', isCodeMode);
+    dom.imageModeBtn.setAttribute('aria-selected', String(!isCodeMode));
+    dom.codeModeBtn.setAttribute('aria-selected', String(isCodeMode));
+    dom.imageInputPanel.classList.toggle('hidden', isCodeMode);
+    dom.codeInputPanel.classList.toggle('hidden', !isCodeMode);
+    checkGenerateButtonState(false);
+
+    if (isCodeMode) {
+        dom.sourceCodeInput.focus();
     }
 }
 
@@ -578,7 +606,9 @@ async function generateContent(extraPrompt = null) {
         return;
     }
 
-    if (state.currentImages.length === 0) return;
+    const sourceCode = dom.sourceCodeInput.value.trim();
+    if (state.inputMode === 'image' && state.currentImages.length === 0) return;
+    if (state.inputMode === 'code' && !sourceCode) return;
 
     const prompt = state.prompts.find(p => p.id === state.selectedPromptId);
     if (!prompt) return;
@@ -592,19 +622,24 @@ async function generateContent(extraPrompt = null) {
         // Use the edited content directly from the textarea
         let finalPromptContent = dom.currentPromptDisplay.value;
 
+        if (state.inputMode === 'code') {
+            finalPromptContent += `\n\n【入力形式について】\n上記の指示に「画像」とある場合は、以下の入力コードを問題文として読み替えてください。コードの内容を正確に読み取り、選択中の指示に従って解答を作成してください。\n\n【入力コード】\n${sourceCode}\n【入力コードここまで】`;
+        }
+
         if (extraPrompt) {
             finalPromptContent += `\n\n【追加の指示】\n${extraPrompt}`;
         }
 
         // --- 連携された生のTikZコードが存在する場合はプロンプトに組み込む ---
-        if (state.receivedTikzCode && state.receivedTikzCode.length > 0) {
+        if (state.inputMode === 'image' && state.receivedTikzCode && state.receivedTikzCode.length > 0) {
             finalPromptContent += `\n\n【重要・グラフ描画の指示】\n以下のTikZコードは図形（グラフ等）の正確な描画データです。画像内のグラフ部分を出力する際は、画像から推測するのではなく、必ず以下のTikZコードをそのままコピーして組み込んでください。\n`;
             state.receivedTikzCode.forEach((code, index) => {
                 finalPromptContent += `\n--- 図形${index + 1}のTikZコード ---\n${code}\n--------------------\n`;
             });
         }
 
-        const result = await callGeminiApi(finalPromptContent, state.currentImages);
+        const images = state.inputMode === 'image' ? state.currentImages : [];
+        const result = await callGeminiApi(finalPromptContent, images);
 
         // Extract content
         // Simple text extraction
@@ -1090,6 +1125,19 @@ function setupEventListeners() {
 
     dom.promptSelect.addEventListener('change', updateCurrentPromptDisplay);
 
+    dom.imageModeBtn.addEventListener('click', () => setInputMode('image'));
+    dom.codeModeBtn.addEventListener('click', () => setInputMode('code'));
+    dom.sourceCodeInput.addEventListener('input', () => {
+        if (state.hasGenerated) {
+            state.hasGenerated = false;
+            setOutputCode('');
+            dom.additionalPromptInput.value = '';
+            dom.copyBtn.hidden = true;
+            dom.obsidianExportBtn.hidden = true;
+        }
+        checkGenerateButtonState(false);
+    });
+
     dom.generateBtn.addEventListener('click', () => {
         const extraPrompt = dom.additionalPromptInput.value.trim();
         generateContent(extraPrompt);
@@ -1174,6 +1222,7 @@ function setupEventListeners() {
 
     // Paste support
     window.addEventListener('paste', (e) => {
+        if (state.inputMode !== 'image') return;
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (const item of items) {
             if (item.kind === 'file') {

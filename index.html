@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.json?v=4">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icon-192x192.png?v=4">
-    <link rel="stylesheet" href="style.css?v=1.8.11">
+    <link rel="stylesheet" href="style.css?v=1.9.0">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -57,17 +57,36 @@
                         </button>
                     </section>
 
-                    <!-- Image Input Section -->
-                    <section class="drop-zone-container">
-                        <div id="drop-zone" class="drop-zone">
-                            <span class="material-icons-round upload-icon">cloud_upload</span>
-                            <p>画像をここにドラッグ＆ドロップ</p>
-                            <p class="sub-text">またはクリックしてファイルを選択</p>
-                            <input type="file" id="file-input" accept="image/*,application/pdf,application/pdf" multiple
-                                hidden>
+                    <!-- Source Input Section -->
+                    <section class="source-input-section">
+                        <div class="input-mode-tabs" role="tablist" aria-label="入力方法">
+                            <button id="image-mode-btn" class="input-mode-tab active" type="button" role="tab"
+                                aria-selected="true" aria-controls="image-input-panel">
+                                <span class="material-icons-round">image</span>画像
+                            </button>
+                            <button id="code-mode-btn" class="input-mode-tab" type="button" role="tab"
+                                aria-selected="false" aria-controls="code-input-panel">
+                                <span class="material-icons-round">code</span>コード
+                            </button>
                         </div>
-                        <div id="image-preview-container" class="image-preview-container hidden">
-                            <!-- Previews injected here -->
+
+                        <div id="image-input-panel" class="input-mode-panel" role="tabpanel">
+                            <div id="drop-zone" class="drop-zone">
+                                <span class="material-icons-round upload-icon">cloud_upload</span>
+                                <p>画像をここにドラッグ＆ドロップ</p>
+                                <p class="sub-text">またはクリックしてファイルを選択／クリップボードから貼り付け</p>
+                                <input type="file" id="file-input" accept="image/*,application/pdf" multiple hidden>
+                            </div>
+                            <div id="image-preview-container" class="image-preview-container hidden">
+                                <!-- Previews injected here -->
+                            </div>
+                        </div>
+
+                        <div id="code-input-panel" class="input-mode-panel hidden" role="tabpanel">
+                            <label for="source-code-input" class="source-code-label">問題のコード</label>
+                            <textarea id="source-code-input" class="source-code-input" spellcheck="false"
+                                placeholder="LaTeX、TeX Sauce、Markdownなどのコードをここに貼り付けてください"></textarea>
+                            <p class="input-hint">入力したコードを問題文として、選択中のプロンプトに従って解答を作成します。</p>
                         </div>
                     </section>
 
@@ -216,7 +235,7 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
-    <script src="app.js?v=1.8.10"></script>
+    <script src="app.js?v=1.9.0"></script>
 </body>
 
 </html>
