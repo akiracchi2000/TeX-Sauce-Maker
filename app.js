@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.9.0';
+const APP_VERSION = 'v1.10.0';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -183,7 +183,14 @@ function loadSettings() {
 
     // Display current model
     const savedModel = localStorage.getItem(STORAGE_KEY_MODEL_NAME);
-    const modelToUse = savedModel || DEFAULT_GEMINI_MODEL;
+    const migratedModel = savedModel === 'gemini-3.7-flash-preview'
+        ? 'gemini-3.7-flash'
+        : savedModel;
+    const modelToUse = migratedModel || DEFAULT_GEMINI_MODEL;
+
+    if (savedModel && savedModel !== modelToUse) {
+        localStorage.setItem(STORAGE_KEY_MODEL_NAME, modelToUse);
+    }
 
     state.modelName = modelToUse;
     if (dom.modelNameInput) {
