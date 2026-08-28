@@ -1,5 +1,6 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.10.0';
+const APP_VERSION = 'v1.11.0';
+const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
 const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
@@ -42,7 +43,8 @@ let state = {
     inputMode: 'image',
     currentImages: [], // Array of { id, file, base64, mimeType }
     hasGenerated: false,
-    receivedTikzCode: [] // Array of raw TikZ code strings received from Clear Maker 2
+    receivedTikzCode: [], // Array of raw TikZ code strings received from Clear Maker 2
+    tagDictionary: null
 };
 
 // --- DOM Elements ---
@@ -126,10 +128,11 @@ function getOutputCode() {
 }
 
 // --- Initialization ---
-function init() {
+async function init() {
     initializeOutputEditor();
     loadSettings();
     loadPrompts();
+    await loadTagDictionary();
     renderPromptSelect();
     setupEventListeners();
     showVersion();
@@ -234,6 +237,36 @@ function showVersion() {
     }
     if (dom.headerVersionDisplay) {
         dom.headerVersionDisplay.textContent = APP_VERSION;
+    }
+}
+
+async function loadTagDictionary() {
+    try {
+        const response = await fetch(TAG_DICTIONARY_PATH, { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const dictionary = await response.json();
+        const hasValidTerms = Array.isArray(dictionary?.terms?.canonical)
+            && dictionary.terms.aliases
+            && typeof dictionary.terms.aliases === 'object';
+        const hasValidMethods = Array.isArray(dictionary?.methods?.canonical)
+            && dictionary.methods.aliases
+            && typeof dictionary.methods.aliases === 'object';
+
+        if (!hasValidTerms || !hasValidMethods) {
+            throw new Error('辞書のterms/methods形式が不正です');
+        }
+
+        state.tagDictionary = dictionary;
+        console.log(
+            `Tag dictionary loaded: ${dictionary.terms.canonical.length} terms, `
+            + `${dictionary.methods.canonical.length} methods`
+        );
+    } catch (error) {
+        state.tagDictionary = null;
+        console.warn('Tag dictionary could not be loaded; tags will be exported unchanged.', error);
     }
 }
 
@@ -786,6 +819,24 @@ function uniqueItems(items) {
     });
 }
 
+function normalizeTagItems(items, category) {
+    const cleaned = uniqueItems((Array.isArray(items) ? items : [])
+        .map(item => String(item).replace(/\s+/g, ' ').trim())
+        .filter(Boolean));
+    const dictionarySection = state.tagDictionary?.[category];
+
+    if (!dictionarySection) {
+        return { items: cleaned, unknown: [] };
+    }
+
+    const aliases = dictionarySection.aliases || {};
+    const canonicalSet = new Set(dictionarySection.canonical || []);
+    const normalized = uniqueItems(cleaned.map(item => aliases[item] || item));
+    const unknown = normalized.filter(item => !canonicalSet.has(item));
+
+    return { items: normalized, unknown };
+}
+
 function formatObsidianCodeSections(source) {
     // 言語名の有無や表記にかかわらず、Markdownのフェンスを抽出する。
     const fencedBlockPattern = /^(?:```|~~~)[^\r\n]*\r?\n([\s\S]*?)^(?:```|~~~)[^\r\n]*$/gm;
@@ -890,9 +941,15 @@ ${texSource}`;
         // baseName取得
         let baseName = dom.baseNameInput.value.trim() || 'output';
 
-        const terms = (metadata.terms || []).filter(Boolean);
-        const methods = (metadata.methods || []).filter(Boolean);
+        const normalizedTerms = normalizeTagItems(metadata.terms, 'terms');
+        const normalizedMethods = normalizeTagItems(metadata.methods, 'methods');
+        const terms = normalizedTerms.items;
+        const methods = normalizedMethods.items;
         const fields = (metadata.fields || []).filter(Boolean);
+        const unknownTags = uniqueItems([...normalizedTerms.unknown, ...normalizedMethods.unknown]);
+        if (unknownTags.length) {
+            console.warn('Tag dictionaryに未登録のタグ:', unknownTags);
+        }
         const tags = uniqueItems([...terms, ...methods, ...fields]);
         const difficulty = inferDifficultyFromMetadata(metadata.difficulty, tags);
         const difficultyLabel = '★'.repeat(difficulty);
@@ -926,7 +983,8 @@ ${codeSections}
 
         const saved = await downloadFile(`${baseName}.md`, mdContent);
         if (saved) {
-            showToast('Obsidian用.mdを書き出しました');
+            const suffix = unknownTags.length ? `（未登録タグ ${unknownTags.length}件）` : '';
+            showToast(`Obsidian用.mdを書き出しました${suffix}`);
         }
 
     } catch (error) {
@@ -1246,7 +1304,9 @@ function setupEventListeners() {
 }
 
 // Start
-init();
+init().catch(error => {
+    console.error('Initialization failed:', error);
+});
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {

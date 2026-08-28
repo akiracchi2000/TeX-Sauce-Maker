@@ -4,6 +4,11 @@
 
 ## バージョン履歴
 
+### v1.11.0
+- Math_obsidianから生成した `math_tag_dictionary.json` を追加。
+- Obsidian用Markdownの書き出し前に、`terms` と `methods` の別名を正規タグへ自動変換。
+- 辞書に未登録のタグは削除せず保持し、書き出し時に件数を通知。
+
 ### v1.10.0
 - 利用可能な生成AIモデルに `gemini-3.7-flash` を追加。
 
