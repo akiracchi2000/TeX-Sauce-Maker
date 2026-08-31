@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.11.0';
+const APP_VERSION = 'v1.12.1';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -249,20 +249,24 @@ async function loadTagDictionary() {
 
         const dictionary = await response.json();
         const hasValidTerms = Array.isArray(dictionary?.terms?.canonical)
+            && Array.isArray(dictionary.terms.primary_candidates)
             && dictionary.terms.aliases
             && typeof dictionary.terms.aliases === 'object';
         const hasValidMethods = Array.isArray(dictionary?.methods?.canonical)
+            && Array.isArray(dictionary.methods.primary_candidates)
             && dictionary.methods.aliases
             && typeof dictionary.methods.aliases === 'object';
 
         if (!hasValidTerms || !hasValidMethods) {
-            throw new Error('辞書のterms/methods形式が不正です');
+            throw new Error('辞書のterms/methods/primary_candidates形式が不正です');
         }
 
         state.tagDictionary = dictionary;
         console.log(
             `Tag dictionary loaded: ${dictionary.terms.canonical.length} terms, `
-            + `${dictionary.methods.canonical.length} methods`
+            + `${dictionary.methods.canonical.length} methods, `
+            + `${dictionary.terms.primary_candidates.length} primary term candidates, `
+            + `${dictionary.methods.primary_candidates.length} primary method candidates`
         );
     } catch (error) {
         state.tagDictionary = null;
@@ -837,6 +841,21 @@ function normalizeTagItems(items, category) {
     return { items: normalized, unknown };
 }
 
+function normalizePrimaryTagItems(items, category) {
+    const normalized = normalizeTagItems(items, category);
+    const dictionarySection = state.tagDictionary?.[category];
+    const canonicalSet = new Set(dictionarySection?.canonical || []);
+    const primaryCandidateSet = new Set(dictionarySection?.primary_candidates || []);
+
+    // primary_* は辞書の primary_candidates に存在する canonical タグだけを採用する。
+    // 辞書を読み込めなかった場合は、通常タグと同様に値を保持する。
+    const primaryItems = dictionarySection
+        ? normalized.items.filter(item => canonicalSet.has(item) && primaryCandidateSet.has(item))
+        : normalized.items;
+
+    return { items: primaryItems, unknown: normalized.unknown };
+}
+
 function formatObsidianCodeSections(source) {
     // 言語名の有無や表記にかかわらず、Markdownのフェンスを抽出する。
     const fencedBlockPattern = /^(?:```|~~~)[^\r\n]*\r?\n([\s\S]*?)^(?:```|~~~)[^\r\n]*$/gm;
@@ -909,9 +928,14 @@ async function exportToObsidian() {
     try {
         const metadataPrompt = `以下のTeXソースを解析し、以下の情報をJSON形式で返してください。
 1. 文章内の用語 (terms)
-2. 解法の用語 (methods)
-3. 分野の用語 (fields: 数学I, 数学A, 数学II, 数学B, 数学III, 数学C などの大項目)
-4. 難易度 (difficulty: 1から5の数値)
+2. 文章内の中心的な用語 (primary_terms)
+3. 解法の用語 (methods)
+4. 解答で中心となる解法 (primary_methods)
+5. 分野の用語 (fields: 数学I, 数学A, 数学II, 数学B, 数学III, 数学C などの大項目)
+6. 難易度 (difficulty: 1から5の数値)
+
+primary_termsはtermsから、primary_methodsはmethodsから、問題の主題や解法を代表するものだけを選んでください。
+primary_termsとprimary_methodsに新しい表記を作らず、対応するtermsまたはmethodsの値を完全に同じ表記で入れてください。
 
 難易度は、問題文そのものだけでなく、生成済みの解答・解説の内容と、作成したterms/methods/fieldsタグも必ず参照して判別してください。
 解答で使われている手法の数、場合分けの多さ、計算量、論証の長さ、発想の必要性もdifficultyに反映してください。
@@ -927,7 +951,9 @@ async function exportToObsidian() {
 JSONフォーマット:
 {
   "terms": ["用語1", "用語2"],
+  "primary_terms": ["用語1"],
   "methods": ["手法1", "手法2"],
+  "primary_methods": ["手法1"],
   "fields": ["分野1"],
   "difficulty": 3
 }
@@ -943,10 +969,20 @@ ${texSource}`;
 
         const normalizedTerms = normalizeTagItems(metadata.terms, 'terms');
         const normalizedMethods = normalizeTagItems(metadata.methods, 'methods');
-        const terms = normalizedTerms.items;
-        const methods = normalizedMethods.items;
+        const normalizedPrimaryTerms = normalizePrimaryTagItems(metadata.primary_terms, 'terms');
+        const normalizedPrimaryMethods = normalizePrimaryTagItems(metadata.primary_methods, 'methods');
+        const primaryTerms = normalizedPrimaryTerms.items;
+        const primaryMethods = normalizedPrimaryMethods.items;
+        // primary_* が必ず対応する全タグの部分集合になるよう、不足分を全タグへ補う。
+        const terms = uniqueItems([...normalizedTerms.items, ...primaryTerms]);
+        const methods = uniqueItems([...normalizedMethods.items, ...primaryMethods]);
         const fields = (metadata.fields || []).filter(Boolean);
-        const unknownTags = uniqueItems([...normalizedTerms.unknown, ...normalizedMethods.unknown]);
+        const unknownTags = uniqueItems([
+            ...normalizedTerms.unknown,
+            ...normalizedMethods.unknown,
+            ...normalizedPrimaryTerms.unknown,
+            ...normalizedPrimaryMethods.unknown
+        ]);
         if (unknownTags.length) {
             console.warn('Tag dictionaryに未登録のタグ:', unknownTags);
         }
@@ -962,8 +998,12 @@ difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
 terms:
 ${formatYamlList(terms)}
+primary_terms:
+${formatYamlList(primaryTerms)}
 methods:
 ${formatYamlList(methods)}
+primary_methods:
+${formatYamlList(primaryMethods)}
 fields:
 ${formatYamlList(fields)}
 tags:

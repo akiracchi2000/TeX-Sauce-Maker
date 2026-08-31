@@ -4,6 +4,15 @@
 
 ## バージョン履歴
 
+### v1.12.1
+- `math_tag_dictionary.json` の `aliases` を使い、既存Markdownの `terms` / `methods` / `primary_*` / `tags` をcanonical表記へ統一する再構築ツールを追加・改善。
+- 分類別タグを `tags` へ同期し、正規化後の重複を除去。辞書にないタグは削除せず監査結果へ記録。
+- 既存ノートで見つかった安全に同一視できる表記ゆれ8種類を辞書のaliasへ追加。
+
+### v1.12.0
+- Obsidian用Markdownに、問題の中心的な用語を示す `primary_terms` と中心的な解法を示す `primary_methods` を追加。
+- `primary_terms` / `primary_methods` をタグ辞書の `aliases` で正規化し、`primary_candidates` に含まれる候補へ限定したうえで、対応する `terms` / `methods` の部分集合になるよう補正。
+
 ### v1.11.0
 - Math_obsidianから生成した `math_tag_dictionary.json` を追加。
 - Obsidian用Markdownの書き出し前に、`terms` と `methods` の別名を正規タグへ自動変換。
@@ -82,3 +91,12 @@
 
 ### v1.6.3
 - 利用可能な生成AIモデルに `gemini-3-flash-preview` を追加。
+
+## 既存Markdownタグの再構築
+
+`tools/rebuild_primary_tags.js` は既定でドライランします。`--write` 使用時は `--backup` が必須で、変更前の全ファイルを復元可能なJSONとして先に保存します。
+
+```powershell
+node .\tools\rebuild_primary_tags.js --target "C:\path\to\vault" --dictionary .\math_tag_dictionary.json
+node .\tools\rebuild_primary_tags.js --target "C:\path\to\vault" --dictionary .\math_tag_dictionary.json --write --backup .\tag-backup.json
+```
