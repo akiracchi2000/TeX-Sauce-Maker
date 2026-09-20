@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.12.1';
+const APP_VERSION = 'v1.12.2';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -799,16 +799,18 @@ function inferDifficultyFromMetadata(rawDifficulty, tags) {
     return Math.min(5, Math.max(1, difficulty));
 }
 
-function formatYamlList(items) {
-    if (!items.length) {
-        return '[]';
+function formatYamlListProperty(name, items) {
+    const normalizedItems = items
+        .map(item => String(item).replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+    if (!normalizedItems.length) {
+        return `${name}: []`;
     }
 
-    return items
-        .map(item => String(item).replace(/\s+/g, ' ').trim())
-        .filter(Boolean)
+    return `${name}:\n${normalizedItems
         .map(item => `  - ${item}`)
-        .join('\n');
+        .join('\n')}`;
 }
 
 function uniqueItems(items) {
@@ -996,18 +998,12 @@ type: problem
 unit: ""
 difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
-terms:
-${formatYamlList(terms)}
-primary_terms:
-${formatYamlList(primaryTerms)}
-methods:
-${formatYamlList(methods)}
-primary_methods:
-${formatYamlList(primaryMethods)}
-fields:
-${formatYamlList(fields)}
-tags:
-${formatYamlList(tags)}
+${formatYamlListProperty('terms', terms)}
+${formatYamlListProperty('primary_terms', primaryTerms)}
+${formatYamlListProperty('methods', methods)}
+${formatYamlListProperty('primary_methods', primaryMethods)}
+${formatYamlListProperty('fields', fields)}
+${formatYamlListProperty('tags', tags)}
 ---
 
 ### TeXコード

@@ -4,6 +4,9 @@
 
 ## バージョン履歴
 
+### v1.12.2
+- Obsidian用Markdownで空のタグ配列を `プロパティ名: []` と同じ行に出力し、frontmatter全体が無効になる問題を修正。
+
 ### v1.12.1
 - `math_tag_dictionary.json` の `aliases` を使い、既存Markdownの `terms` / `methods` / `primary_*` / `tags` をcanonical表記へ統一する再構築ツールを追加・改善。
 - 分類別タグを `tags` へ同期し、正規化後の重複を除去。辞書にないタグは削除せず監査結果へ記録。
