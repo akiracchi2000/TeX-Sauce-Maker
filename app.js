@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.12.2';
+const APP_VERSION = 'v1.13.0';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -777,26 +777,108 @@ function setLoading(isLoading) {
     }
 }
 
-function inferDifficultyFromMetadata(rawDifficulty, tags) {
-    const numericDifficulty = Number.parseInt(rawDifficulty, 10);
-    let difficulty = Number.isFinite(numericDifficulty) ? numericDifficulty : 3;
-    const tagText = tags.join(' ').toLowerCase();
+const DIFFICULTY_RUBRIC_VERSION = 'v0.2';
+const DIFFICULTY_AXES = ['idea', 'steps', 'calc', 'guide'];
 
-    const difficultySignals = [
-        { level: 5, patterns: ['難関', '最難関', '非典型', '高度', '発想', '論証', '抽象', '大学入試発展'] },
-        { level: 4, patterns: ['発展', '証明', '場合分け', '融合', '数iii', '数学iii', '複素数平面', '整数', '軌跡', '最大最小', '確率漸化式'] },
-        { level: 3, patterns: ['標準', '応用', '複数', 'ベクトル', '漸化式', '微分', '積分', '数列', '確率'] },
-        { level: 2, patterns: ['典型', '基本', '公式', '計算', '単一'] }
-    ];
+function clampAxisScore(value) {
+    const n = Number.parseInt(value, 10);
+    return Number.isFinite(n) ? Math.min(2, Math.max(0, n)) : null;
+}
 
-    for (const signal of difficultySignals) {
-        if (signal.patterns.some(pattern => tagText.includes(pattern))) {
-            difficulty = Math.max(difficulty, signal.level);
-            break;
+// 合計点(0〜8) → difficulty(1〜5)。境界を変えるときはこの表だけを直す
+const LEVEL_BANDS = [
+    { maxTotal: 1, level: 1 },
+    { maxTotal: 3, level: 2 },
+    { maxTotal: 5, level: 3 },
+    { maxTotal: 6, level: 4 },
+    { maxTotal: 8, level: 5 },
+];
+
+function scoreToLevel(total) {
+    const band = LEVEL_BANDS.find(b => total <= b.maxTotal);
+    return band ? band.level : LEVEL_BANDS[LEVEL_BANDS.length - 1].level;
+}
+
+// AIの前置き文（「以下に…作成します。」「ご指定のルールに基づいた…」など）と、思考ログの残り「thought」
+const AI_PREAMBLE = /^(?:thought|(?:以下に|ご指定の|承知しました).*(?:作成|します|しました).*)$/;
+const FENCE_LINE = /^\s*(?:```|~~~|''')/;
+
+// 生成結果を正規化する：AIの前置き文を消し、''' を ``` に直し、重複した開始フェンスを1つにまとめる
+function normalizeGeneratedMarkdown(text) {
+    const out = [];
+    let inside = false;     // コードブロックの中にいるか
+    let justOpened = false; // 開始フェンスの直後で、まだ中身がないか
+    for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.replace(/^(\s*)'''\\?/, '$1```');
+        if ((!inside || justOpened) && AI_PREAMBLE.test(line.trim())) continue;
+        if (FENCE_LINE.test(line)) {
+            if (inside && justOpened) continue; // 「```latex」が2行続く二重フェンスの2行目を捨てる
+            inside = !inside;
+            justOpened = inside;
+            out.push(line);
+            continue;
         }
+        if (line.trim() !== '') justOpened = false;
+        out.push(line);
     }
+    return out.join('\n');
+}
 
-    return Math.min(5, Math.max(1, difficulty));
+// 本解答だけを取り出す（別解・解法のポイント以降は除外）
+function extractMainSolution(texSource) {
+    const src = normalizeGeneratedMarkdown(texSource);
+    let solution = '';
+    // 1) 「### 解答」見出しがあれば、その後ろ（次の見出しまで）を解答とみなす
+    const heading = src.match(/^#{1,6}\s*解答\s*$/m);
+    if (heading) {
+        solution = src.slice(heading.index + heading[0].length);
+        const next = solution.search(/^#{1,6}\s/m);
+        if (next >= 0) solution = solution.slice(0, next);
+    }
+    // 2) なければ、2つ目以降のコードブロックを解答とみなす
+    if (!solution.trim()) {
+        const fence = /^(?:```|~~~)[^\r\n]*\r?\n([\s\S]*?)^(?:```|~~~)[^\r\n]*$/gm;
+        const blocks = [...src.matchAll(fence)].map(m => m[1]).filter(b => b.trim());
+        solution = blocks.length >= 2 ? blocks.slice(1).join('\n') : '';
+    }
+    // 3) それもなければ「解答例」以降
+    if (!solution.trim()) {
+        const start = src.search(/解答例/);
+        solution = start >= 0 ? src.slice(start) : '';
+    }
+    solution = solution.split('\n').filter(l => !FENCE_LINE.test(l)).join('\n');
+    const cut = solution.search(/\\bekkai|別解|解法のポイント/);
+    return cut >= 0 ? solution.slice(0, cut) : solution;
+}
+
+const MIN_SOLUTION_LINES = 3; // これ未満は抽出に失敗したとみなし、AIの値を使う
+
+// 本解答の行数（LaTeXの改行 \\ の数）から手数を求める。取れなければ null
+function stepsFromSolution(texSource) {
+    const main = extractMainSolution(texSource);
+    if (!main.trim()) return null;
+    const lines = (main.match(/\\\\/g) || []).length;
+    if (lines < MIN_SOLUTION_LINES) return null;
+    if (lines <= 20) return 0;
+    if (lines <= 45) return 1;
+    return 2;
+}
+
+function computeDifficulty(detail, texSource) {
+    const scores = {};
+    for (const axis of DIFFICULTY_AXES) {
+        scores[axis] = clampAxisScore(detail?.[axis]);
+    }
+    const computedSteps = stepsFromSolution(texSource);
+    if (computedSteps !== null) {
+        scores.steps = computedSteps;
+    }
+    // AIが返さなかった観点は1点（標準）として扱う
+    for (const axis of DIFFICULTY_AXES) {
+        if (scores[axis] === null) scores[axis] = 1;
+    }
+    const total = DIFFICULTY_AXES.reduce((sum, axis) => sum + scores[axis], 0);
+    return { ...scores, total, level: scoreToLevel(total), rubric: DIFFICULTY_RUBRIC_VERSION };
 }
 
 function formatYamlListProperty(name, items) {
@@ -915,7 +997,7 @@ ${block}
 }
 
 async function exportToObsidian() {
-    const texSource = getOutputCode();
+    const texSource = normalizeGeneratedMarkdown(getOutputCode());
     if (!texSource) {
         showToast('TeXソースがありません');
         return;
@@ -934,21 +1016,31 @@ async function exportToObsidian() {
 3. 解法の用語 (methods)
 4. 解答で中心となる解法 (primary_methods)
 5. 分野の用語 (fields: 数学I, 数学A, 数学II, 数学B, 数学III, 数学C などの大項目)
-6. 難易度 (difficulty: 1から5の数値)
+6. 難易度の観点別点数 (difficulty_detail)
+
+難易度は、問題の中で最も難しい小問（1つ）を対象に、次の観点をそれぞれ0、1、2の整数で採点してください。
+問題文だけでなく、生成済みの解答の内容も参照してください。
+- idea（着想）: 0=公式・定理の直接の当てはめ / 1=典型テクニック1つ（軸の場合分け、置換、次数下げ、余事象、方べき、部分分数など） / 2=複数手法の組み合わせ、または問題文にない気付きが必要
+- steps（手数）: 最難小問の本解答の長さ。0=短い / 1=中程度 / 2=長い（別解は数えない）
+- calc（計算量）: 0=軽い / 1=根号・分数・文字係数を含む / 2=重くてミスしやすい
+- guide（誘導）: 0=前の小問の結果をそのまま使える。小問が1つの問題では、問題文が方針を指定しているか公式を当てはめるだけ / 1=誘導はあるが方針を自分で立てる部分が残る。小問が1つの問題では、典型的な方針を自分で選ぶ必要がある / 2=方針を自分で組み立てる必要がある、または誘導のない証明が問題の本質
+注意:
+- 分野名や単元名（数III、確率、複素数平面、整数など）だけを理由に点を上げないでください。
+- 典型的な場合分けはidea=1です。場合分けがあることだけでidea=2にしないでください。
+- 教科書の例題にある型なら、手順が長くてもideaは1以下です。
+- 「証明せよ」とあるだけでguide=2にしないでください。定石どおりに進めればよい証明はguide=1です。
+- hardest_part には対象にした小問番号（例: "(3)"）、reason には採点の理由を1文で入れてください。
+
+採点の基準例（idea / calc / guide）:
+- x^100 を x^2+x+1 で割った余り → 0 / 0 / 0
+- 0≦x≦2 のすべての x で ax^2+3>x+2a となる a の条件 → 0 / 1 / 1
+- f(θ)=2(cos^3θ+sin^3θ)=a の解が3個または4個となる a の範囲 → 1 / 1 / 1
+- -1≦x≦1 で |ax^2+bx+c|≦1 ならば |2ax+b|≦4 を示せ → 2 / 0 / 2
+- 曲線 y=x^3+ax^2 上の点 P(u,v)（-1<u<1）を通る傾き b の直線が、どの u でも P 以外の共有点をもつ (a,b) の範囲 → 2 / 1 / 2
+- a_1=0, a_n=[(a_{n-1}+k)/3] で定まる数列が単調で上に有界であり、やがて一定になることを示す → 2 / 1 / 2
 
 primary_termsはtermsから、primary_methodsはmethodsから、問題の主題や解法を代表するものだけを選んでください。
 primary_termsとprimary_methodsに新しい表記を作らず、対応するtermsまたはmethodsの値を完全に同じ表記で入れてください。
-
-難易度は、問題文そのものだけでなく、生成済みの解答・解説の内容と、作成したterms/methods/fieldsタグも必ず参照して判別してください。
-解答で使われている手法の数、場合分けの多さ、計算量、論証の長さ、発想の必要性もdifficultyに反映してください。
-目安:
-- 1: 基本公式の直接適用、計算量が少ない、小問集合など
-- 2: 標準的な典型問題、単一分野の基本手法
-- 3: 複数条件の整理、標準からやや発展、複数手法の組み合わせ
-- 4: 発展問題、場合分け・証明・複数分野融合・高度な発想を含む
-- 5: 難関大レベル、抽象度が高い、非典型で重い発想や長い論証を要する
-
-特にmethodsやfieldsに、発展、証明、場合分け、融合、数III、ベクトル、複素数平面、確率漸化式、整数、軌跡、最大最小など難度に影響するタグが含まれる場合は、それをdifficultyに反映してください。
 
 JSONフォーマット:
 {
@@ -957,7 +1049,7 @@ JSONフォーマット:
   "methods": ["手法1", "手法2"],
   "primary_methods": ["手法1"],
   "fields": ["分野1"],
-  "difficulty": 3
+  "difficulty_detail": { "idea": 1, "steps": 1, "calc": 1, "guide": 1, "hardest_part": "(3)", "reason": "軸と定義域の典型的な場合分け" }
 }
 
 TeXソース:
@@ -989,8 +1081,10 @@ ${texSource}`;
             console.warn('Tag dictionaryに未登録のタグ:', unknownTags);
         }
         const tags = uniqueItems([...terms, ...methods, ...fields]);
-        const difficulty = inferDifficultyFromMetadata(metadata.difficulty, tags);
+        const difficultyResult = computeDifficulty(metadata.difficulty_detail, texSource);
+        const difficulty = difficultyResult.level;
         const difficultyLabel = '★'.repeat(difficulty);
+        console.info('difficulty', difficultyResult, metadata.difficulty_detail?.hardest_part, metadata.difficulty_detail?.reason);
         const codeSections = formatObsidianCodeSections(texSource);
 
         const mdContent = `---
@@ -998,6 +1092,12 @@ type: problem
 unit: ""
 difficulty: ${difficulty}
 difficulty_label: ${difficultyLabel}
+difficulty_score: ${difficultyResult.total}
+difficulty_idea: ${difficultyResult.idea}
+difficulty_steps: ${difficultyResult.steps}
+difficulty_calc: ${difficultyResult.calc}
+difficulty_guide: ${difficultyResult.guide}
+difficulty_rubric: ${difficultyResult.rubric}
 ${formatYamlListProperty('terms', terms)}
 ${formatYamlListProperty('primary_terms', primaryTerms)}
 ${formatYamlListProperty('methods', methods)}
