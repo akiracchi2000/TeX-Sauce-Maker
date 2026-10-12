@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.13.0';
+const APP_VERSION = 'v1.13.1';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -7,6 +7,7 @@ const STOREAGE_KEY_SELECTED_PROMPT = 'tex_sauce_selected_prompt_id';
 const STORAGE_KEY_MODEL_NAME = 'tex_sauce_model_name';
 const STORAGE_KEY_SOUND_ENABLED = 'tex_sauce_sound_enabled';
 const DEFAULT_GEMINI_MODEL = 'gemini-3.1-pro-preview';
+const SUPPORTED_GEMINI_MODELS = ['gemini-3.1-pro-preview', 'gemini-3.8-flash', 'gemini-3-flash-preview'];
 
 const DEFAULT_PROMPTS = [
     {
@@ -186,10 +187,12 @@ function loadSettings() {
 
     // Display current model
     const savedModel = localStorage.getItem(STORAGE_KEY_MODEL_NAME);
-    const migratedModel = savedModel === 'gemini-3.7-flash-preview'
-        ? 'gemini-3.7-flash'
+    const migratedModel = ['gemini-3.7-flash', 'gemini-3.7-flash-preview'].includes(savedModel)
+        ? 'gemini-3.8-flash'
         : savedModel;
-    const modelToUse = migratedModel || DEFAULT_GEMINI_MODEL;
+    const modelToUse = SUPPORTED_GEMINI_MODELS.includes(migratedModel)
+        ? migratedModel
+        : DEFAULT_GEMINI_MODEL;
 
     if (savedModel && savedModel !== modelToUse) {
         localStorage.setItem(STORAGE_KEY_MODEL_NAME, modelToUse);
