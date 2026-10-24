@@ -4,6 +4,9 @@
 
 ## バージョン履歴
 
+### v1.13.2
+- Obsidian書き出しで字下げされたフェンスや閉じフェンスの欠落を補正し、解答の開始フェンスを必ず ` ```latex ` に統一。
+
 ### v1.13.1
 - 選択できる生成モデルを `gemini-3.1-pro-preview`、`gemini-3.8-flash`、`gemini-3-flash-preview` の3つに整理。
 - 保存済みの3.7 Flash設定を3.8 Flashへ移行し、選択肢から外れたモデルは既定の3.1 Pro Previewへ変更。

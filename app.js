@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.13.1';
+const APP_VERSION = 'v1.13.2';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -944,59 +944,55 @@ function normalizePrimaryTagItems(items, category) {
 }
 
 function formatObsidianCodeSections(source) {
-    // 言語名の有無や表記にかかわらず、Markdownのフェンスを抽出する。
-    const fencedBlockPattern = /^(?:```|~~~)[^\r\n]*\r?\n([\s\S]*?)^(?:```|~~~)[^\r\n]*$/gm;
-    const blocks = [...source.matchAll(fencedBlockPattern)]
-        .map(match => match[1].trim())
-        .filter(Boolean);
+    const blocks = [];
+    let lines = [];
+    let inside = false;
+    let fenceCharacter = null;
+    let fenceLength = 0;
+    const flushBlock = () => {
+        const block = lines.join('\n').trim();
+        if (block) blocks.push(block);
+        lines = [];
+    };
 
-    // 生成結果の先頭フェンスだけが除去され、
-    // 「1つ目の終了フェンス → 2つ目の開始フェンス」となる場合を補正する。
-    if (blocks.length < 2) {
-        const splitPattern = /^(?:```|~~~)[^\r\n]*\r?\n\s*^(?:```|~~~)[^\r\n]*\r?\n/m;
-        const splitMatch = splitPattern.exec(source);
-
-        if (splitMatch) {
-            const firstBlock = source.slice(0, splitMatch.index).trim();
-            const secondBlock = source.slice(splitMatch.index + splitMatch[0].length)
-                .replace(/\r?\n?(?:```|~~~)\s*$/, '')
-                .trim();
-
-            if (firstBlock && secondBlock) {
-                return `### TeXソース
-\`\`\`latex
-${firstBlock}
-\`\`\`
-
-### 解答
-\`\`\`latex
-${secondBlock}
-\`\`\``;
+    // 字下げ・言語名なし・閉じフェンス欠落にも対応して本文だけを取り出す。
+    for (const line of source.split(/\r?\n/)) {
+        const fence = line.match(/^\s*(`{3,}|~{3,}|'{3,})\s*([^\s]*)\s*$/);
+        if (fence) {
+            const marker = fence[1];
+            const language = fence[2];
+            if (inside) {
+                if (marker[0] !== fenceCharacter || marker.length < fenceLength) {
+                    lines.push(line);
+                    continue;
+                }
+                if (language) {
+                    // 二重の開始フェンス、または直前の閉じフェンスが欠けた場合。
+                    flushBlock();
+                } else {
+                    flushBlock();
+                    inside = false;
+                }
+            } else {
+                const hadUnfencedContent = lines.some(value => value.trim());
+                flushBlock();
+                // 先頭の開始フェンスだけが欠けたブロックの終了行を認識する。
+                inside = Boolean(language) || !hadUnfencedContent;
+                fenceCharacter = marker[0];
+                fenceLength = marker.length;
             }
+            continue;
         }
+        // 生成済みのセクション見出しは書き出し時に付け直す。
+        if (!inside && /^#{1,6}\s/.test(line)) continue;
+        lines.push(line);
     }
+    flushBlock();
 
-    if (blocks.length < 2) {
-        return `### TeXソース
-\`\`\`latex
-${source}
-\`\`\``;
-    }
-
-    const sections = [`### TeXソース
-\`\`\`latex
-${blocks[0]}
-\`\`\``];
-
-    blocks.slice(1).forEach(block => {
-        // 「### 解答」は、必ず2回目以降の ```latex の直前に入れる。
-        sections.push(`### 解答
-\`\`\`latex
-${block}
-\`\`\``);
-    });
-
-    return sections.join('\n\n');
+    return blocks.map((block, index) => {
+        const heading = index === 0 ? 'TeXソース' : '解答';
+        return `### ${heading}\n\`\`\`latex\n${block}\n\`\`\``;
+    }).join('\n\n');
 }
 
 async function exportToObsidian() {
