@@ -9,6 +9,11 @@
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icon-192x192.png?v=4">
     <link rel="stylesheet" href="style.css?v=1.12.2">
+    <style>
+        /* Browser extensions may append elements to body. Keep them from shrinking the app. */
+        body { display: block; }
+        .app-container { margin-inline: auto; }
+    </style>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
@@ -232,7 +237,7 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
-    <script src="app.js?v=1.13.2"></script>
+    <script src="app.js?v=1.13.3"></script>
 </body>
 
 </html>
