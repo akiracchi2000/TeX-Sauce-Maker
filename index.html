@@ -19,6 +19,7 @@
         rel="stylesheet">
     <!-- Google Material Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="obsidian-batch.css?v=1.14.0">
 </head>
 
 <body>
@@ -119,6 +120,9 @@
                                 </button>
                                 <button id="copy-btn" class="success-btn" hidden>
                                     <span class="material-icons-round">content_copy</span> コピー
+                                </button>
+                                <button id="obsidian-batch-btn" type="button" class="secondary-btn">
+                                    <span class="material-icons-round">folder_open</span> Obsidian一括処理
                                 </button>
                                 <button id="obsidian-export-btn" class="secondary-btn" hidden>
                                     <span class="material-icons-round">description</span> Obsidian用.md変換
@@ -237,7 +241,25 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
-    <script src="app.js?v=1.13.3"></script>
+    <dialog id="obsidian-batch-dialog" aria-labelledby="obsidian-batch-heading">
+        <header>
+            <h2 id="obsidian-batch-heading">Obsidian一括処理</h2>
+            <button id="obsidian-batch-close" type="button" class="secondary-btn">閉じる</button>
+        </header>
+        <div>
+            <button id="obsidian-folder-btn" type="button" class="secondary-btn">保管フォルダを選択</button>
+            <span id="obsidian-folder-label">未選択</span>
+        </div>
+        <div id="obsidian-batch-rows"></div>
+        <footer>
+            <button id="obsidian-batch-run" type="button" class="primary-btn">Obsidian書き出し</button>
+            <button id="obsidian-batch-save" type="button" class="success-btn" hidden>確定して保存</button>
+            <p id="obsidian-batch-status" role="status"></p>
+        </footer>
+    </dialog>
+    <script src="app.js?v=1.14.0"></script>
+    <script src="obsidian-classification.js?v=1.14.0"></script>
+    <script src="obsidian-batch.js?v=1.14.0"></script>
 </body>
 
 </html>
