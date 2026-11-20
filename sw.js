@@ -1,9 +1,12 @@
-const CACHE_NAME = 'tex-sauce-maker-v35';
+const CACHE_NAME = 'tex-sauce-maker-v36';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './style.css?v=1.12.2',
-    './app.js?v=1.13.3',
+    './app.js?v=1.14.0',
+    './obsidian-classification.js?v=1.14.0',
+    './obsidian-batch.js?v=1.14.0',
+    './obsidian-batch.css?v=1.14.0',
     './math_tag_dictionary.json',
     './icon-192x192.png',
     './icon-512x512.png',

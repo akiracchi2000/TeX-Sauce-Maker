@@ -1,5 +1,5 @@
 // --- Constants & Defaults ---
-const APP_VERSION = 'v1.13.3';
+const APP_VERSION = 'v1.14.0';
 const TAG_DICTIONARY_PATH = './math_tag_dictionary.json';
 const STORAGE_KEY_PROMPTS = 'tex_sauce_prompts';
 const STORAGE_KEY_API_KEY = 'tex_sauce_api_key';
@@ -724,7 +724,7 @@ async function generateContent(extraPrompt = null) {
 
 
 
-async function callGeminiApi(promptText, images) {
+async function callGeminiApi(promptText, images, generationOptions = {}) {
     const model = state.modelName || DEFAULT_GEMINI_MODEL;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${state.apiKey}`;
 
@@ -746,6 +746,7 @@ async function callGeminiApi(promptText, images) {
         }],
         generationConfig: {
             temperature: 0.2,
+            ...generationOptions,
         }
     };
 
@@ -1009,7 +1010,24 @@ async function exportToObsidian() {
 
     setLoading(true);
     try {
-        const metadataPrompt = `以下のTeXソースを解析し、以下の情報をJSON形式で返してください。
+        const baseName = dom.baseNameInput.value.trim() || 'output';
+        const { mdContent, unknownTags } = await buildObsidianMarkdown(texSource, baseName);
+        const saved = await downloadFile(`${baseName}.md`, mdContent);
+        if (saved) {
+            const suffix = unknownTags.length ? `（未登録タグ ${unknownTags.length}件）` : '';
+            showToast(`Obsidian用.mdを書き出しました${suffix}`);
+        }
+
+    } catch (error) {
+        console.error('Obsidian export failed:', error);
+        showToast('変換に失敗しました: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function buildObsidianMarkdown(texSource, baseName) {
+    const metadataPrompt = `以下のTeXソースを解析し、以下の情報をJSON形式で返してください。
 1. 文章内の用語 (terms)
 2. 文章内の中心的な用語 (primary_terms)
 3. 解法の用語 (methods)
@@ -1054,39 +1072,36 @@ JSONフォーマット:
 TeXソース:
 ${texSource}`;
 
-        const metadataResponse = await callGeminiApiForMetadata(metadataPrompt);
-        const metadata = JSON.parse(metadataResponse);
+    const metadataResponse = await callGeminiApiForMetadata(metadataPrompt);
+    const metadata = JSON.parse(metadataResponse);
 
-        // baseName取得
-        let baseName = dom.baseNameInput.value.trim() || 'output';
+    const normalizedTerms = normalizeTagItems(metadata.terms, 'terms');
+    const normalizedMethods = normalizeTagItems(metadata.methods, 'methods');
+    const normalizedPrimaryTerms = normalizePrimaryTagItems(metadata.primary_terms, 'terms');
+    const normalizedPrimaryMethods = normalizePrimaryTagItems(metadata.primary_methods, 'methods');
+    const primaryTerms = normalizedPrimaryTerms.items;
+    const primaryMethods = normalizedPrimaryMethods.items;
+    // primary_* が必ず対応する全タグの部分集合になるよう、不足分を全タグへ補う。
+    const terms = uniqueItems([...normalizedTerms.items, ...primaryTerms]);
+    const methods = uniqueItems([...normalizedMethods.items, ...primaryMethods]);
+    const fields = (metadata.fields || []).filter(Boolean);
+    const unknownTags = uniqueItems([
+        ...normalizedTerms.unknown,
+        ...normalizedMethods.unknown,
+        ...normalizedPrimaryTerms.unknown,
+        ...normalizedPrimaryMethods.unknown
+    ]);
+    if (unknownTags.length) {
+        console.warn('Tag dictionaryに未登録のタグ:', unknownTags);
+    }
+    const tags = uniqueItems([...terms, ...methods, ...fields]);
+    const difficultyResult = computeDifficulty(metadata.difficulty_detail, texSource);
+    const difficulty = difficultyResult.level;
+    const difficultyLabel = '★'.repeat(difficulty);
+    console.info('difficulty', difficultyResult, metadata.difficulty_detail?.hardest_part, metadata.difficulty_detail?.reason);
+    const codeSections = formatObsidianCodeSections(texSource);
 
-        const normalizedTerms = normalizeTagItems(metadata.terms, 'terms');
-        const normalizedMethods = normalizeTagItems(metadata.methods, 'methods');
-        const normalizedPrimaryTerms = normalizePrimaryTagItems(metadata.primary_terms, 'terms');
-        const normalizedPrimaryMethods = normalizePrimaryTagItems(metadata.primary_methods, 'methods');
-        const primaryTerms = normalizedPrimaryTerms.items;
-        const primaryMethods = normalizedPrimaryMethods.items;
-        // primary_* が必ず対応する全タグの部分集合になるよう、不足分を全タグへ補う。
-        const terms = uniqueItems([...normalizedTerms.items, ...primaryTerms]);
-        const methods = uniqueItems([...normalizedMethods.items, ...primaryMethods]);
-        const fields = (metadata.fields || []).filter(Boolean);
-        const unknownTags = uniqueItems([
-            ...normalizedTerms.unknown,
-            ...normalizedMethods.unknown,
-            ...normalizedPrimaryTerms.unknown,
-            ...normalizedPrimaryMethods.unknown
-        ]);
-        if (unknownTags.length) {
-            console.warn('Tag dictionaryに未登録のタグ:', unknownTags);
-        }
-        const tags = uniqueItems([...terms, ...methods, ...fields]);
-        const difficultyResult = computeDifficulty(metadata.difficulty_detail, texSource);
-        const difficulty = difficultyResult.level;
-        const difficultyLabel = '★'.repeat(difficulty);
-        console.info('difficulty', difficultyResult, metadata.difficulty_detail?.hardest_part, metadata.difficulty_detail?.reason);
-        const codeSections = formatObsidianCodeSections(texSource);
-
-        const mdContent = `---
+    const mdContent = `---
 type: problem
 unit: ""
 difficulty: ${difficulty}
@@ -1116,18 +1131,7 @@ ${formatYamlListProperty('tags', tags)}
 ${codeSections}
 `;
 
-        const saved = await downloadFile(`${baseName}.md`, mdContent);
-        if (saved) {
-            const suffix = unknownTags.length ? `（未登録タグ ${unknownTags.length}件）` : '';
-            showToast(`Obsidian用.mdを書き出しました${suffix}`);
-        }
-
-    } catch (error) {
-        console.error('Obsidian export failed:', error);
-        showToast('変換に失敗しました: ' + error.message);
-    } finally {
-        setLoading(false);
-    }
+    return { mdContent, unknownTags };
 }
 
 async function callGeminiApiForMetadata(promptText) {

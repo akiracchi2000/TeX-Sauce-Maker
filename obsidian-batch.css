@@ -1,0 +1,90 @@
+#obsidian-batch-dialog {
+    width: min(1100px, 94vw);
+    max-height: 90vh;
+    padding: 1.25rem;
+    border: 1px solid #506079;
+    border-radius: 12px;
+    background: #151d2b;
+    color: #f1f5fb;
+    color-scheme: dark;
+}
+
+#obsidian-batch-dialog::backdrop {
+    background: #000a;
+}
+
+#obsidian-batch-dialog header,
+#obsidian-batch-dialog footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-block: .5rem;
+}
+
+#obsidian-batch-dialog header {
+    justify-content: space-between;
+}
+
+.obsidian-batch-image {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: 1rem;
+    margin-top: 1rem;
+    border-top: 1px solid #506079;
+    padding-block: 1rem;
+}
+
+.obsidian-batch-image img {
+    display: block;
+    width: 100%;
+    height: auto;
+    position: sticky;
+    top: 0;
+}
+
+#obsidian-batch-dialog fieldset {
+    min-width: 0;
+    border: 1px solid #506079;
+    border-radius: 8px;
+    padding: .75rem;
+    margin-top: .75rem;
+}
+
+#obsidian-batch-dialog label {
+    display: block;
+    margin-bottom: .5rem;
+}
+
+#obsidian-batch-dialog :is(select, input[type=text], textarea) {
+    max-width: 100%;
+    border: 1px solid #62748d;
+    border-radius: 4px;
+    padding: .35rem;
+    color: inherit;
+    background: #101723;
+}
+
+#obsidian-batch-dialog :is(input[type=text], textarea) {
+    display: block;
+    width: 100%;
+}
+
+#obsidian-batch-dialog textarea {
+    font-family: monospace;
+    resize: vertical;
+}
+
+#obsidian-batch-dialog [hidden] {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .obsidian-batch-image {
+        grid-template-columns: 1fr;
+    }
+    .obsidian-batch-image img {
+        position: static;
+    }
+}
